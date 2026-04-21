@@ -55,9 +55,12 @@ Request human approval for a critical action. If no response within timeout, aut
 ```bash
 ailoop authorize "Deploy version 1.2.3 to production"
 ailoop authorize "Delete user data" --timeout 300 --channel admin-ops
+ailoop authorize "Restart service?" --default no
 ```
 
-Options: `--timeout <seconds>`, `--channel <name>`, `--server <url>`, `--json`
+Options: `--timeout <seconds>`, `--channel <name>`, `--server <url>`, `--json`, `--default <yes|no>`
+
+Press Enter to accept the configured default (`yes` by default; use `--default no` for deny-on-Enter). Timeout, read errors, and Ctrl+C still resolve to denied for security.
 
 ### say
 
@@ -87,10 +90,17 @@ Stream agent output to the server.
 
 ```bash
 ailoop forward --channel my-agent
-ailoop forward --input output.jsonl --channel my-agent --server http://localhost:8080
+ailoop forward --input output.jsonl --channel my-agent --url ws://127.0.0.1:8080
 ```
 
-Options: `--channel <name>`, `--input <file>`, `--server <url>`, `--format <cursor|jsonl>`
+**Example: Cursor CLI**
+
+- Prerequisite: start the server in one terminal (`ailoop serve`).
+- In another terminal, run the Cursor/agent in print mode with stream-json and pipe to forward:
+  `agent -p --output-format stream-json "Your prompt" 2>&1 | ailoop forward --channel public --agent-type cursor`
+- Omit `--input` to read from stdin; default `--url` is `ws://127.0.0.1:8080`. (The binary may be named `agent`, `codex`, or `cursor` depending on installation.)
+
+Options: `--channel <name>`, `--input <file>`, `--url <websocket-url>` (default `ws://127.0.0.1:8080`), `--agent-type <cursor|jsonl|opencode>`, `--format <stream-json|json|text>`, `--transport <websocket|file>`
 
 ### config
 
@@ -135,11 +145,20 @@ Channels isolate workflows. Names: 1-64 chars, lowercase alphanumeric, hyphens, 
 ## Telegram provider
 
 1. Create bot via [@BotFather](https://t.me/BotFather), copy token.
-2. Get chat ID (e.g. [@userinfobot](https://t.me/userinfobot) or group ID).
-3. Set token in environment: `export AILOOP_TELEGRAM_BOT_TOKEN=your_bot_token`
-4. Config: `ailoop config --init` and enable Telegram with chat_id, or add `[providers.telegram]` with `enabled = true` and `chat_id` in config.
-5. Test: `ailoop provider telegram test`
-6. Run server: `ailoop serve`; questions/authorizations can be answered in Telegram or terminal.
+2. **Start a chat with your bot**: In Telegram, search for **your** bot by its username (e.g. `@YourBot_bot`), open that chat (not BotFather), then tap **Start** or send `/start`. You must do this in the chat with your bot; sending `/start` to @BotFather does not enable your bot to send you messages.
+3. Get chat ID (e.g. [@userinfobot](https://t.me/userinfobot) or group ID).
+4. Set token in environment: `export AILOOP_TELEGRAM_BOT_TOKEN=your_bot_token`
+5. Config: `ailoop config --init` and enable Telegram with chat_id, or add `[providers.telegram]` with `enabled = true` and `chat_id` in config.
+6. Test: `ailoop provider telegram test`
+7. Run server: `ailoop serve`; questions/authorizations can be answered in Telegram or terminal.
+
+## Troubleshooting
+
+**Connection refused when using forward**: Ensure `ailoop serve` is running (default WebSocket port 8080). Use `--url ws://HOST:PORT` if the server is elsewhere.
+
+**No messages visible on server**: If the server runs in an IDE or integrated terminal, stdout may be buffered. Run `ailoop serve` in an external terminal (real TTY) to see "Processing message" and notification lines.
+
+**Testing WebSocket message delivery**: Use [websocat](https://github.com/vi/websocat) to send Message JSON lines to the server. Example: (1) Capture messages to a file: `agent -p --output-format stream-json "prompt" 2>&1 | ailoop forward --channel public --agent-type cursor --transport file --output /tmp/ailoop-messages.jsonl`. (2) Start server, then replay: `while IFS= read -r line; do echo "$line" | websocat ws://127.0.0.1:8080; done < /tmp/ailoop-messages.jsonl`. Install websocat from your package manager or GitHub releases; this is for manual/testing use, not required by the test suite.
 
 ## Getting help
 
